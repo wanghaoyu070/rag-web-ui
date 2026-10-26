@@ -1,10 +1,10 @@
-# 知页 · ZhiPage
+# RAG Desk
 
 **让你的文档成为可对话的知识库。**
 
-知页是支持本地模型、文档语义检索与来源引用的开源知识库应用，由 [wanghaoyu070](https://github.com/wanghaoyu070) 维护与持续改进。
+RAG Desk是支持本地模型、文档语义检索与来源引用的开源知识库应用，由 [wanghaoyu070](https://github.com/wanghaoyu070) 维护与持续改进。
 
-基于 [RAG Web UI](https://github.com/rag-web-ui/rag-web-ui) 开发，保留上游 Git 历史和许可证。知页目前处于早期迭代阶段。
+基于 [RAG Web UI](https://github.com/rag-web-ui/rag-web-ui) 开发，保留上游 Git 历史和许可证。RAG Desk目前处于早期迭代阶段。
 
 ## 可以做什么
 
@@ -59,6 +59,6 @@ Next.js、React、TypeScript、FastAPI、LangChain、MySQL、ChromaDB / Qdrant�
 
 ## 来源与许可证
 
-本项目沿用仓库中的 [Apache-2.0 许可证](LICENSE)，保留上游版权、许可证和修改历史。上游原始说明归档于 [docs/upstream](docs/upstream)，其中关于使用范围的表述属于上游原文，不应被理解为知页新增的许可条款；上游 README 与许可证表述存在不一致，需进一步向上游核实。
+本项目沿用仓库中的 [Apache-2.0 许可证](LICENSE)，保留上游版权、许可证和修改历史。上游原始说明归档于 [docs/upstream](docs/upstream)，其中关于使用范围的表述属于上游原文，不应被理解为RAG Desk新增的许可条款；上游 README 与许可证表述存在不一致，需进一步向上游核实。
 
-知页的本地部署基线和后续改进由 wanghaoyu070 维护。本次品牌整理不改变上游代码的版权归属，也不新增许可限制。
+RAG Desk的本地部署基线和后续改进由 wanghaoyu070 维护。本次品牌整理不改变上游代码的版权归属，也不新增许可限制。

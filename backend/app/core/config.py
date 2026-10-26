@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "知页 · ZhiPage"  # Project name
+    PROJECT_NAME: str = "RAG Desk"  # Project name
     VERSION: str = "0.1.0"  # Project version
     API_V1_STR: str = "/api"  # API version string
 

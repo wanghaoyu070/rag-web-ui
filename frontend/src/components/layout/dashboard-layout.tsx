@@ -60,10 +60,10 @@ export default function DashboardLayout({
             >
               <img
                 src="/logo.svg"
-                alt="知页"
+                alt="RAG Desk"
                 className="w-9 h-9 mr-3 rounded-lg"
               />
-              知页 · ZhiPage
+              RAG Desk
             </Link>
           </div>
 

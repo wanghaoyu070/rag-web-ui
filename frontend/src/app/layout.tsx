@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   icons: { icon: "/logo.svg" },
-  title: "知页 · ZhiPage",
+  title: "RAG Desk",
   description: "让你的文档成为可对话的知识库。支持本地模型、语义检索与来源引用。",
 };
 
