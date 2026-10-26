@@ -2,7 +2,7 @@ from typing import Optional
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 from langchain_deepseek import ChatDeepSeek
-from langchain_ollama import OllamaLLM
+from langchain_ollama import ChatOllama
 from app.core.config import settings
 
 class LLMFactory:
@@ -36,7 +36,7 @@ class LLMFactory:
             )
         elif provider.lower() == "ollama":
             # Initialize Ollama model
-            return OllamaLLM(
+            return ChatOllama(
                 model=settings.OLLAMA_MODEL,
                 base_url=settings.OLLAMA_API_BASE,
                 temperature=temperature,
