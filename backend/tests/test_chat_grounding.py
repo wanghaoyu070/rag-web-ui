@@ -39,7 +39,7 @@ class GroundingTests(unittest.IsolatedAsyncioTestCase):
             Document(page_content="不能仅凭单一症状判断。", metadata={"document_id": 12}),
         ]
         store = MagicMock()
-        store.as_retriever.return_value = RunnableLambda(lambda query: docs)
+        store.similarity_search_with_score.return_value = [(doc, 0.1 + i) for i, doc in enumerate(docs)]
         db = MagicMock()
         db.query.return_value.filter.return_value.all.side_effect = [
             [SimpleNamespace(id=7)], [SimpleNamespace(id=12)]
@@ -65,6 +65,16 @@ class GroundingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(answer, "不能仅凭单一症状判断。[citation:2]")
         self.assertNotIn("citation_index", docs[0].metadata)
         db.close.assert_called_once()
+        saved = [call.args[0] for call in db.add.call_args_list if getattr(call.args[0], "role", None) == "assistant"][-1]
+        trace = saved.rag_trace
+        self.assertEqual(trace["status"], "completed")
+        self.assertEqual(trace["retrieval_query"], question)
+        self.assertFalse(trace["rewrite_used"])
+        self.assertEqual(trace["evidence"][1]["score"], 1.1)
+        self.assertEqual(trace["model_inputs"]["answer"][-1]["content"], question)
+        self.assertEqual(trace["citation_check"]["cited_numbers"], [2])
+        self.assertFalse(trace["citation_check"]["support_verified"])
+        self.assertGreater(trace["timings_ms"]["total"], 0)
 
     def test_ollama_factory_uses_chat_roles(self):
         self.assertIsInstance(LLMFactory.create(provider="ollama"), ChatOllama)

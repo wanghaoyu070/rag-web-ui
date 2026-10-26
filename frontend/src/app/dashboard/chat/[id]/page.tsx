@@ -8,6 +8,7 @@ import DashboardLayout from "@/components/layout/dashboard-layout";
 import { api, ApiError } from "@/lib/api";
 import { useToast } from "@/components/ui/use-toast";
 import { Answer } from "@/components/chat/answer";
+import { RagTracePanel } from "@/components/chat/rag-trace-panel";
 
 interface Message {
   id: string;
@@ -58,6 +59,8 @@ export default function ChatPage({ params }: { params: { id: string } }) {
     setMessages,
   } = useChat({
     api: `/api/chat/${params.id}/messages`,
+    onFinish: () => { void fetchChat(); },
+    onError: () => { void fetchChat(); },
     headers: {
       Authorization: `Bearer ${
         typeof window !== "undefined"
@@ -264,6 +267,7 @@ export default function ChatPage({ params }: { params: { id: string } }) {
                     markdown={message.content}
                     citations={message.citations}
                   />
+                  <RagTracePanel chatId={params.id} messageId={message.id} disabled={isLoading || !/^\d+$/.test(message.id)} />
                 </div>
               </div>
             ) : (

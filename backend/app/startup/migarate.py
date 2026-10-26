@@ -6,6 +6,7 @@ from typing import Generator, Tuple
 from alembic.config import Config
 from alembic.config import main as alembic_main
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection
 
@@ -52,7 +53,7 @@ class DatabaseMigrator:
         with self.database_connection() as connection:
             context = MigrationContext.configure(connection)
             current_rev = context.get_current_revision()
-            heads = context.get_current_heads()
+            heads = ScriptDirectory.from_config(self.alembic_cfg).get_heads()
 
         if not heads:
             logger.warning("No migration heads found. Database might not be initialized.")

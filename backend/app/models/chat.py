@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, Table
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, Table, JSON
 from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import relationship
 from app.models.base import Base, TimestampMixin
@@ -33,6 +33,7 @@ class Message(Base, TimestampMixin):
     id = Column(Integer, primary_key=True, index=True)
     content = Column(LONGTEXT, nullable=False)
     role = Column(String(50), nullable=False)
+    rag_trace = Column(JSON, nullable=True)
     chat_id = Column(Integer, ForeignKey("chats.id"), nullable=False)
 
     # Relationships

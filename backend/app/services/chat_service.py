@@ -1,12 +1,15 @@
 import json
 import base64
+import asyncio
+import time
 from typing import List, AsyncGenerator
 from sqlalchemy.orm import Session
 from langchain.chains import create_history_aware_retriever, create_retrieval_chain
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder, PromptTemplate
 from langchain_core.messages import HumanMessage, AIMessage
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough, RunnableLambda
+from app.services.rag_trace import RagTraceRecorder
 from app.core.config import settings
 from app.models.chat import Message
 from app.models.knowledge import KnowledgeBase, Document
@@ -15,8 +18,8 @@ from app.services.vector_store import VectorStoreFactory
 from app.services.embedding.embedding_factory import EmbeddingsFactory
 from app.services.llm.llm_factory import LLMFactory
 
-set_verbose(True)
-set_debug(True)
+set_verbose(False)
+set_debug(False)
 
 async def generate_response(
     query: str,
@@ -25,6 +28,10 @@ async def generate_response(
     chat_id: int,
     db: Session
 ) -> AsyncGenerator[str, None]:
+    recorder = RagTraceRecorder(query, knowledge_base_ids)
+    answer_text = ""
+    full_response = ""
+    bot_message = None
     try:
         # Create user message
         user_message = Message(
@@ -39,6 +46,7 @@ async def generate_response(
         bot_message = Message(
             content="",
             role="assistant",
+            rag_trace=recorder.data,
             chat_id=chat_id
         )
         db.add(bot_message)
@@ -56,6 +64,7 @@ async def generate_response(
         
         # Create a vector store for each knowledge base
         vector_stores = []
+        used_kb_id = None
         for kb in knowledge_bases:
             documents = db.query(Document).filter(Document.knowledge_base_id == kb.id).all()
             if documents:
@@ -65,22 +74,50 @@ async def generate_response(
                     collection_name=f"kb_{kb.id}",
                     embedding_function=embeddings,
                 )
-                print(f"Collection {f'kb_{kb.id}'} count:", vector_store._store._collection.count())
                 vector_stores.append(vector_store)
+                if used_kb_id is None:
+                    used_kb_id = kb.id
         
         if not vector_stores:
             error_msg = "I don't have any knowledge base to help answer your question."
             yield f'0:"{error_msg}"\n'
             yield 'd:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0}}\n'
+            recorder.data["stage"] = "retrieval"
+            recorder.finish(error_msg, "failed", {"type": "NoKnowledgeBase", "message": "没有可检索的文档"})
+            bot_message.rag_trace = dict(recorder.data)
             bot_message.content = error_msg
             db.commit()
             return
         
         # Use first vector store for now
-        retriever = vector_stores[0].as_retriever()
+        recorder.data["used_knowledge_base_id"] = used_kb_id
+        recorder.data["score_type"] = (
+            "Chroma distance（越小越近，非置信度）" if settings.VECTOR_STORE_TYPE == "chroma"
+            else "向量数据库原始分数（含义依配置，非置信度）"
+        )
+
+        async def retrieve(search_query):
+            recorder.data["stage"] = "retrieval"
+            recorder.data["retrieval_query"] = search_query
+            started = time.perf_counter()
+            try:
+                pairs = await asyncio.to_thread(
+                    vector_stores[0].similarity_search_with_score, search_query, k=4
+                )
+                recorder.data["evidence"] = [
+                    {"number": index, "content": doc.page_content,
+                     "metadata": doc.metadata, "score": float(score)}
+                    for index, (doc, score) in enumerate(pairs, 1)
+                ]
+                return [doc for doc, score in pairs]
+            finally:
+                recorder.data["timings_ms"]["retrieval"] = round((time.perf_counter() - started) * 1000, 1)
+
+        retriever = RunnableLambda(retrieve)
         
         # Initialize the language model
         llm = LLMFactory.create()
+        recorder.data["model"] = {"provider": settings.CHAT_PROVIDER, "name": getattr(llm, "model", getattr(llm, "model_name", None))}
         
         # Create contextualize question prompt
         contextualize_q_system_prompt = (
@@ -155,11 +192,11 @@ async def generate_response(
                     message["content"] = message["content"].split("__LLM_RESPONSE__")[-1]
                 chat_history.append(AIMessage(content=message["content"]))
 
-        full_response = ""
+        recorder.data["rewrite_used"] = bool(chat_history)
         async for chunk in rag_chain.astream({
             "input": query,
             "chat_history": chat_history
-        }):
+        }, config={"callbacks": [recorder]}):
             if "context" in chunk:
                 serializable_context = []
                 for context in chunk["context"]:
@@ -186,24 +223,36 @@ async def generate_response(
             if "answer" in chunk:
                 answer_chunk = chunk["answer"]
                 full_response += answer_chunk
+                answer_text += answer_chunk
                 # Escape quotes and use json.dumps to properly handle special characters
                 escaped_chunk = (answer_chunk
                     .replace('"', '\\"')
                     .replace('\n', '\\n'))
                 yield f'0:"{escaped_chunk}"\n'
             
-        # Update bot message content
-        bot_message.content = full_response
-        db.commit()
+        recorder.finish(answer_text)
             
+    except asyncio.CancelledError:
+        recorder.finish(answer_text, "interrupted", {"type": "Cancelled", "message": "请求中断"})
+        raise
     except Exception as e:
-        error_message = f"Error generating response: {str(e)}"
-        print(error_message)
-        yield '3:{text}\n'.format(text=error_message)
-        
-        # Update bot message with error
-        if 'bot_message' in locals():
-            bot_message.content = error_message
-            db.commit()
+        recorder.finish(answer_text, "failed", {"type": type(e).__name__, "message": "该阶段执行失败，请检查服务连接或配置"})
+        # Keep the wire error valid JSON; do not expose provider credentials in exception text.
+        yield '3:' + json.dumps("回答生成失败，可查看 RAG 过程定位失败阶段。", ensure_ascii=False) + '\n'
     finally:
-        db.close()
+        if bot_message is not None:
+            if recorder.data["status"] == "running":
+                recorder.finish(answer_text, "interrupted", {"type": "Interrupted", "message": "执行未完成"})
+            try:
+                db.rollback()
+                bot_message.rag_trace = dict(recorder.data)
+                stored_content = full_response or recorder.data.get("answer", "")
+                if recorder.data["status"] != "completed":
+                    stored_content += "\n\n回答未完成，请查看 RAG 过程定位失败阶段。"
+                bot_message.content = stored_content
+                db.add(bot_message)
+                db.commit()
+            finally:
+                db.close()
+        else:
+            db.close()

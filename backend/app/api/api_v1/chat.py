@@ -86,6 +86,24 @@ def get_chat(
         raise HTTPException(status_code=404, detail="Chat not found")
     return chat
 
+@router.get("/{chat_id}/messages/{message_id}/trace")
+def get_message_trace(
+    chat_id: int,
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    message = db.query(Message).join(Chat).filter(
+        Message.id == message_id,
+        Message.chat_id == chat_id,
+        Message.role == "assistant",
+        Chat.user_id == current_user.id,
+    ).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    return {"message_id": message.id, "trace": message.rag_trace}
+
+
 @router.post("/{chat_id}/messages")
 async def create_message(
     *,
