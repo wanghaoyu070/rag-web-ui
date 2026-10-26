@@ -7,28 +7,28 @@ export default function Home() {
         {/* Hero Section */}
         <div className="text-center space-y-8 mb-24">
           <h1 className="text-6xl sm:text-7xl font-bold tracking-tight text-black">
-            RAG Web UI
+            知页 · ZhiPage
           </h1>
           <p className="text-xl sm:text-2xl text-gray-500 max-w-3xl mx-auto font-light leading-relaxed">
-            Experience the next generation of AI interaction.
+            让你的文档成为可对话的知识库。
             <br />
-            Powerful. Intuitive. Revolutionary.
+            本地模型 · 语义检索 · 来源引用
           </p>
           <div className="flex flex-col sm:flex-row gap-6 justify-center items-center mt-12">
             <Link
               href="/register"
               className="px-8 py-4 bg-blue-600 text-white rounded-full text-lg font-medium transition-all duration-300 hover:bg-blue-700 w-full sm:w-auto"
             >
-              Get Started
+              开始使用
             </Link>
             <Link
               href="/login"
               className="px-8 py-4 bg-gray-200 text-gray-800 rounded-full text-lg font-medium transition-all duration-300 hover:bg-gray-300 w-full sm:w-auto"
             >
-              Sign In
+              登录
             </Link>
             <a
-              href="https://github.com/JohannLai/rag-web-ui"
+              href="https://github.com/wanghaoyu070/zhipage"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 px-8 py-4 bg-gray-200 text-gray-800 rounded-full text-lg font-medium transition-all duration-300 hover:bg-gray-300 w-full sm:w-auto"
@@ -41,19 +41,19 @@ export default function Home() {
           </div>
           <div className="mt-12 flex justify-center space-x-4">
             <a
-              href="https://github.com/JohannLai/rag-web-ui"
+              href="https://github.com/wanghaoyu070/zhipage"
               target="_blank"
               rel="noopener noreferrer"
             >
               <img
                 alt="GitHub stars"
-                src="https://img.shields.io/github/stars/JohannLai/rag-web-ui?style=social"
+                src="https://img.shields.io/github/stars/wanghaoyu070/zhipage?style=social"
                 className="h-6"
               />
             </a>
             <img
               alt="License"
-              src="https://img.shields.io/github/license/JohannLai/rag-web-ui"
+              src="https://img.shields.io/github/license/wanghaoyu070/zhipage"
               className="h-6"
             />
             <img
@@ -88,12 +88,10 @@ export default function Home() {
               </svg>
             </div>
             <h3 className="text-2xl font-semibold text-black mb-4">
-              Powerful RAG Engine
+              文档知识库
             </h3>
             <p className="text-gray-500 leading-relaxed">
-              Harness the power of state-of-the-art AI models with our
-              advanced retrieval and generation system. Built for performance
-              and scalability.
+              上传 PDF、Word、Markdown 或文本，建立自己的知识库，通过自然语言查找资料。
             </p>
           </div>
 
@@ -114,11 +112,10 @@ export default function Home() {
               </svg>
             </div>
             <h3 className="text-2xl font-semibold text-black mb-4">
-              Seamless Integration
+              检索 API
             </h3>
             <p className="text-gray-500 leading-relaxed">
-              Effortlessly connect with your existing tech stack. Our flexible
-              API and comprehensive SDK make integration a breeze.
+              通过 API Key 获取相关文档片段，将知识检索接入自己的应用与工作流。
             </p>
           </div>
 
@@ -139,28 +136,32 @@ export default function Home() {
               </svg>
             </div>
             <h3 className="text-2xl font-semibold text-black mb-4">
-              Real-time Analytics
+              本地模型问答
             </h3>
             <p className="text-gray-500 leading-relaxed">
-              Gain deep insights into your RAG system's performance with our
-              comprehensive analytics dashboard and monitoring tools.
+              通过 Ollama 在本机运行模型，结合文档生成回答与引用。回答准确性仍需人工核查。
             </p>
           </div>
         </div>
 
         {/* Call to Action */}
         <div className="text-center bg-gray-100 rounded-3xl p-16">
-          <h2 className="text-4xl font-bold mb-6">Ready to get started?</h2>
+          <h2 className="text-4xl font-bold mb-6">从第一份文档开始</h2>
           <p className="text-xl text-gray-500 mb-8 max-w-2xl mx-auto">
-            Join thousands of developers who are already building the future with RAG Web UI.
+            创建知识库、上传文档，然后围绕资料提问。
           </p>
           <Link
             href="/register"
             className="px-8 py-4 bg-blue-600 text-white rounded-full text-lg font-medium transition-all duration-300 hover:bg-blue-700"
           >
-            Try it for free
+            创建账户
           </Link>
         </div>
+        <footer className="mt-12 text-center text-sm text-gray-500">
+          由 wanghaoyu070 维护 · 基于{" "}
+          <a href="https://github.com/rag-web-ui/rag-web-ui" className="underline" target="_blank" rel="noopener noreferrer">RAG Web UI</a>
+          {" "}开发 · Apache-2.0
+        </footer>
       </div>
     </main>
   );

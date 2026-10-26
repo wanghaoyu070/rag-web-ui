@@ -8,8 +8,9 @@ import { Toaster } from "@/components/ui/toaster";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "RAG Web UI",
-  description: "A web UI for RAG applications",
+  icons: { icon: "/logo.svg" },
+  title: "知页 · ZhiPage",
+  description: "让你的文档成为可对话的知识库。支持本地模型、语义检索与来源引用。",
 };
 
 export default function RootLayout({
@@ -18,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="zh-CN">
       <body className={inter.className}>
         {children}
         <Toaster />
