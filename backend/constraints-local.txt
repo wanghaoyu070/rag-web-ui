@@ -1,0 +1,11 @@
+langchain==0.3.19
+langchain-community==0.3.18
+langchain-openai==0.3.7
+langchain-chroma==0.2.2
+chromadb==0.6.3
+langchain-huggingface==0.1.2
+sentence-transformers==3.4.1
+transformers==4.49.0
+torch==2.5.1
+numpy<2
+fastapi==0.115.8

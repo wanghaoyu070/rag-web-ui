@@ -1,0 +1,25 @@
+{
+  "documents": [
+    {
+      "file": "01_中医饮食科普_基本概念.txt",
+      "characters": 556
+    },
+    {
+      "file": "02_日常膳食_搭配与示例.txt",
+      "characters": 630
+    },
+    {
+      "file": "03_养生食品_宣传误区.txt",
+      "characters": 727
+    },
+    {
+      "file": "04_咨询边界_如何回答.txt",
+      "characters": 577
+    },
+    {
+      "file": "05_虚构活动_青禾食养读书会.txt",
+      "characters": 623
+    }
+  ],
+  "questions": 18
+}

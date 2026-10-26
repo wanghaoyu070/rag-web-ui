@@ -1,0 +1,64 @@
+name: rag-web-ui
+services:
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile.local
+    image: rag-web-ui-backend:latest
+    env_file: .env
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    restart: unless-stopped
+    depends_on:
+      db: {condition: service_healthy}
+      chromadb: {condition: service_started}
+      minio: {condition: service_started}
+    networks: [app_network]
+  frontend:
+    build: ../../frontend
+    image: rag-web-ui-frontend:latest
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+    networks: [app_network]
+  db:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ragwebui
+      MYSQL_USER: ragwebui
+      MYSQL_PASSWORD: ragwebui
+      TZ: Asia/Shanghai
+    volumes: [mysql_data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "ragwebui", "--password=ragwebui"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [app_network]
+  chromadb:
+    image: chromadb/chroma:0.6.3
+    volumes: [chroma_data:/chroma/chroma]
+    restart: unless-stopped
+    networks: [app_network]
+  minio:
+    image: minio/minio:latest
+    command: server --console-address ":9001" /data
+    environment: {MINIO_ROOT_USER: minioadmin, MINIO_ROOT_PASSWORD: minioadmin}
+    ports: ["127.0.0.1:9001:9001"]
+    volumes: [minio_data:/data]
+    restart: unless-stopped
+    networks: [app_network]
+  nginx:
+    build: .
+    image: rag-web-ui-nginx-local
+    ports: ["127.0.0.1:8088:80"]
+    depends_on: [backend, frontend]
+    restart: unless-stopped
+    networks: [app_network]
+volumes:
+  mysql_data:
+  chroma_data:
+  minio_data:
+networks:
+  app_network:
