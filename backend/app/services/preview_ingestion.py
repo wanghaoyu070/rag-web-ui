@@ -66,7 +66,7 @@ def read_snapshot(client, preview):
     return payload
 
 
-def create_preview(db, kb_id, user_id, upload_id, config):
+def create_preview(db, kb_id, user_id, upload_id, config, experimental=False):
     upload = owned_upload(db, kb_id, user_id, upload_id)
     if upload.status in ("processing", "completed", "expired"):
         raise HTTPException(409, "文件正在处理、已入库或已过期，请重新上传需要处理的文件")
@@ -89,15 +89,16 @@ def create_preview(db, kb_id, user_id, upload_id, config):
     preview_id = str(uuid.uuid4())
     snapshot_path = f"kb_{kb_id}/previews/{preview_id}.json"
     client.put_object(settings.MINIO_BUCKET_NAME, snapshot_path, BytesIO(raw), len(raw), content_type="application/json")
-    if upload.current_preview_id:
+    if upload.current_preview_id and not experimental:
         old = db.get(DocumentPreview, upload.current_preview_id)
         if old and old.status == "ready":
             old.status = "superseded"
     preview = DocumentPreview(id=preview_id, upload_id=upload.id, file_hash=upload.file_hash,
         snapshot_path=snapshot_path, snapshot_hash=hashlib.sha256(raw).hexdigest(),
         config=config.model_dump(), processor_version=PROCESSOR_VERSION,
-        chunk_count=len(chunks), status="ready", expires_at=datetime.utcnow()+timedelta(hours=24))
-    upload.current_preview_id = preview_id
+        chunk_count=len(chunks), status="experiment" if experimental else "ready", expires_at=datetime.utcnow()+timedelta(hours=24))
+    if not experimental:
+        upload.current_preview_id = preview_id
     db.add(preview)
     try:
         db.commit()
@@ -110,7 +111,7 @@ def create_preview(db, kb_id, user_id, upload_id, config):
             "snapshot_hash": preview.snapshot_hash, "expires_at": preview.expires_at.isoformat()+"Z"}
 
 
-def confirm_previews(db, kb_id, user_id, preview_ids):
+def confirm_previews(db, kb_id, user_id, preview_ids, select_experiment=False):
     results, scheduled = [], []
     try:
         for preview_id in sorted(set(preview_ids)):
@@ -125,6 +126,14 @@ def confirm_previews(db, kb_id, user_id, preview_ids):
                 continue
             if preview.expires_at <= datetime.utcnow():
                 raise HTTPException(410, "预览已过期，请重新生成预览")
+            if select_experiment and preview.status == "experiment":
+                if upload.status in ("processing", "completed", "expired"):
+                    raise HTTPException(409, "文件正在处理、已入库或已过期")
+                if upload.current_preview_id:
+                    old = db.get(DocumentPreview, upload.current_preview_id)
+                    if old and old.status == "ready":
+                        old.status = "superseded"
+                upload.current_preview_id, preview.status = preview.id, "ready"
             if upload.current_preview_id != preview.id or preview.status not in ("ready", "failed"):
                 raise HTTPException(409, "预览已被替换或不可用，请重新预览")
             if preview.file_hash != upload.file_hash or preview.processor_version != PROCESSOR_VERSION:
@@ -186,7 +195,7 @@ def ingest_preview(task_id):
         document = Document(file_name=upload.file_name, file_path=permanent_path,
             file_hash=upload.file_hash, file_size=upload.file_size, content_type=upload.content_type,
             knowledge_base_id=upload.knowledge_base_id, preview_id=preview.id,
-            chunk_config={**preview.config, "strategy": "recursive", "unit": "characters", "version": preview.processor_version},
+            chunk_config={**preview.config, "strategy": preview.config.get("strategy", "recursive"), "unit": "characters", "version": preview.processor_version},
             chunk_count=preview.chunk_count)
         db.add(document)
         db.flush()

@@ -23,7 +23,7 @@ from app.schemas.knowledge import (
     KnowledgeBaseResponse,
     KnowledgeBaseUpdate,
     DocumentResponse,
-    PreviewRequest, ChunkConfig, ProcessPreviewsRequest
+    PreviewRequest, ChunkConfig, ProcessPreviewsRequest, LabCompareRequest, LabProcessRequest
 )
 from app.services.preview_ingestion import create_preview, confirm_previews, ingest_preview, encode_snapshot
 from app.core.config import settings
@@ -313,7 +313,7 @@ def preview_kb_documents(
 ):
     # These IDs identify uploads only; document IDs are a different namespace.
     return {upload_id: create_preview(db, kb_id, current_user.id, upload_id,
-                ChunkConfig(chunk_size=preview_request.chunk_size, chunk_overlap=preview_request.chunk_overlap))
+                ChunkConfig(chunk_size=preview_request.chunk_size, chunk_overlap=preview_request.chunk_overlap, strategy=preview_request.strategy))
             for upload_id in dict.fromkeys(preview_request.upload_ids)}
 
 
@@ -518,3 +518,19 @@ async def test_retrieval(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{kb_id}/chunk-lab/compare")
+def compare_chunk_strategies(kb_id: int, request: LabCompareRequest,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.services.chunk_lab import compare
+    return compare(db, kb_id, current_user.id, request)
+
+
+@router.post("/{kb_id}/chunk-lab/process")
+def process_lab_choice(kb_id: int, request: LabProcessRequest, background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    tasks, scheduled = confirm_previews(db, kb_id, current_user.id, [request.preview_id], select_experiment=True)
+    for task_id in scheduled:
+        background_tasks.add_task(ingest_preview, task_id)
+    return {"tasks": tasks}

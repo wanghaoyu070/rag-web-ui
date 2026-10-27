@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
 from pydantic import BaseModel, Field, model_validator
 
@@ -83,6 +83,7 @@ class KnowledgeBaseResponse(KnowledgeBaseBase):
         from_attributes = True
 
 class ChunkConfig(BaseModel):
+    strategy: Literal["recursive", "fixed", "heading"] = "recursive"
     chunk_size: int = Field(default=1000, strict=True, ge=1, le=20000)
     chunk_overlap: int = Field(default=200, strict=True, ge=0)
 
@@ -99,3 +100,21 @@ class PreviewRequest(ChunkConfig):
 
 class ProcessPreviewsRequest(BaseModel):
     preview_ids: List[str] = Field(min_length=1, max_length=50)
+
+
+class LabCompareRequest(BaseModel):
+    upload_id: Optional[int] = None
+    document_id: Optional[int] = None
+    configs: List[ChunkConfig] = Field(min_length=2, max_length=3)
+
+    @model_validator(mode="after")
+    def validate_source(self):
+        if (self.upload_id is None) == (self.document_id is None):
+            raise ValueError("请选择一个上传文件或已入库文档")
+        if len({c.strategy for c in self.configs}) != len(self.configs):
+            raise ValueError("同一策略只可选择一次")
+        return self
+
+
+class LabProcessRequest(BaseModel):
+    preview_id: str

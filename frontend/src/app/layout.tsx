@@ -1,11 +1,9 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import "highlight.js/styles/github.css";
 // 如果使用 App Router
 import { Toaster } from "@/components/ui/toaster";
 
-const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   icons: { icon: "/logo.svg" },
@@ -20,7 +18,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
-      <body className={inter.className}>
+      <body className="font-sans antialiased">
         {children}
         <Toaster />
       </body>

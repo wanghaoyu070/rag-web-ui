@@ -1,0 +1,17 @@
+.surface :is(select, input, button, a, summary):focus-visible {
+  outline: 2px solid #737373;
+  outline-offset: 3px;
+  box-shadow: none;
+}
+
+.surface ::selection {
+  background: #d4d4d4;
+  color: #171717;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .surface * {
+    transition: none;
+    scroll-behavior: auto;
+  }
+}

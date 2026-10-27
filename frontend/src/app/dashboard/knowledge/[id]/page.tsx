@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState, useCallback } from "react";
 import { DocumentUploadSteps } from "@/components/knowledge-base/document-upload-steps";
@@ -29,8 +30,9 @@ export default function KnowledgeBasePage() {
 
   return (
     <DashboardLayout>
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-wrap gap-4 justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Knowledge Base</h1>
+        <div className="flex items-center gap-3"><Button variant="outline" asChild><Link href={`/dashboard/knowledge/${knowledgeBaseId}/chunk-lab`}>分块实验室</Link></Button>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -51,7 +53,7 @@ export default function KnowledgeBasePage() {
               onComplete={handleUploadComplete}
             />
           </DialogContent>
-        </Dialog>
+        </Dialog></div>
       </div>
 
       <div className="mt-8">

@@ -33,16 +33,16 @@ const Breadcrumb = () => {
   if (pathname === "/") return null;
 
   return (
-    <nav className="flex items-center space-x-2 text-base text-muted-foreground mb-6">
+    <nav aria-label="Breadcrumb" className="flex items-center space-x-2 overflow-x-auto whitespace-nowrap pl-12 pb-1 text-base text-muted-foreground mb-6 lg:pl-0">
       <Link
         href="/dashboard"
-        className="flex items-center hover:text-foreground transition-colors"
+        className="flex shrink-0 items-center hover:text-foreground transition-colors"
       >
         <Home className="h-4 w-4" />
       </Link>
 
       {breadcrumbs.map((breadcrumb, index) => (
-        <div key={breadcrumb.href} className="flex items-center">
+        <div key={breadcrumb.href} className="flex shrink-0 items-center">
           <ChevronRight className="h-4 w-4 mx-2 text-muted-foreground/50" />
           {breadcrumb.isLast ? (
             <span className="text-foreground font-medium">
