@@ -30,11 +30,11 @@ export function DocumentChunksButton({ knowledgeBaseId, documentId, fileName }: 
       <div className="min-h-0 space-y-3 overflow-y-auto text-sm">
         {loading ? <p role="status">正在读取…</p> : error ? <p role="alert" className="text-destructive">{error}</p> : data && <>
           <p>实际入库 {data.total_chunks} 个片段</p>
-          <p className="text-muted-foreground">{data.config ? `${{ fixed: "固定字符", recursive: "递归字符", heading: "标题结构" }[data.config.strategy] || data.config.strategy} · 长度 ${data.config.chunk_size} 字符 · 重叠 ${data.config.chunk_overlap} 字符` : "旧文档未记录分块配置，配置未知。"}</p>
+          <p className="text-muted-foreground">{data.config ? `${{ fixed: "Fixed-size Character", recursive: "Recursive Character", heading: "Heading-based" }[data.config.strategy] || data.config.strategy} · Chunk Size ${data.config.chunk_size} · Overlap ${data.config.chunk_overlap} characters` : "旧文档未记录分块配置，配置未知。"}</p>
           {data.snapshot_matches === true && <p className="text-green-700">内容、顺序及来源与已确认预览快照一致。</p>}
           {data.snapshot_matches === false && <p role="alert" className="text-destructive">入库内容与预览快照不一致，请检查数据。</p>}
           {!data.order_known && <p className="text-amber-700">旧文档未记录原始片段顺序，以下仅按存储记录展示。</p>}
-          {data.chunks.map((chunk, index) => <article key={index} className="rounded-lg border p-3"><p className="mb-2 text-xs text-muted-foreground">{data.order_known ? "片段" : "记录"} {index + 1} · {Array.from(chunk.content).length} 字符 · {String(chunk.metadata.source || fileName)}{chunk.metadata.page !== undefined ? ` · 第 ${Number(chunk.metadata.page) + 1} 页` : ""}</p><pre className="whitespace-pre-wrap break-words leading-relaxed">{chunk.content}</pre></article>)}
+          {data.chunks.map((chunk, index) => <article key={index} className="rounded-lg border p-3"><p className="mb-2 text-xs text-muted-foreground">{data.order_known ? "Chunk" : "记录"} {index + 1} · {Array.from(chunk.content).length} characters · {String(chunk.metadata.source || fileName)}{chunk.metadata.page !== undefined ? ` · 第 ${Number(chunk.metadata.page) + 1} 页` : ""}</p><pre className="whitespace-pre-wrap break-words leading-relaxed">{chunk.content}</pre></article>)}
           {!data.chunks.length && <p>没有可展示的片段记录。</p>}
         </>}
       </div>

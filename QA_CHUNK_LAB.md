@@ -2,9 +2,11 @@
 
 ## 从哪里进入
 
-知识库详情 → 分块实验室。支持选择已有 TXT/Markdown，或上传新的 UTF-8 文本。实验限800KB、20万字符，每种策略最多2000个片段。实验阶段不调用向量模型、不写入知识库索引。
+知识库详情 → Chunking Lab。支持选择已有 TXT/Markdown，或上传新的 UTF-8 文本。实验限800KB、20万字符，每种策略最多2000个片段。实验阶段不调用向量模型、不写入知识库索引。
 
 已有文档只读比较；要采用新策略，请以新文件名上传，作为新文档确认入库。本轮不替换已有文档，不提供独立实验向量库、同题检索或回答对比。
+
+界面技术术语使用英文，中文说明保留：Fixed-size Character、Recursive Character、Heading-based、Chunk Size、Chunk Overlap、Chunk、characters，以及统计表中的Strategy、Chunks、Avg. Length、Length Range、Actual Overlap。上传向导与入库片段查看使用相同名称。
 
 ## 如何学习
 

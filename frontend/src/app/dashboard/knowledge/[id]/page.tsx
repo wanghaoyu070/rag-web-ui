@@ -32,7 +32,7 @@ export default function KnowledgeBasePage() {
     <DashboardLayout>
       <div className="flex flex-wrap gap-4 justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Knowledge Base</h1>
-        <div className="flex items-center gap-3"><Button variant="outline" asChild><Link href={`/dashboard/knowledge/${knowledgeBaseId}/chunk-lab`}>分块实验室</Link></Button>
+        <div className="flex items-center gap-3"><Button variant="outline" asChild><Link href={`/dashboard/knowledge/${knowledgeBaseId}/chunk-lab`}>Chunking Lab</Link></Button>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button>
