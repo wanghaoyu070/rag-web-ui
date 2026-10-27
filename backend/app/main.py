@@ -5,6 +5,7 @@ from app.api.openapi.api import router as openapi_router
 from app.core.config import settings
 from app.core.minio import init_minio
 from app.startup.migarate import DatabaseMigrator
+from app.services.preview_ingestion import recover_interrupted_ingestions
 from fastapi import FastAPI
 
 logging.basicConfig(
@@ -30,6 +31,7 @@ async def startup_event():
     # Run database migrations
     migrator = DatabaseMigrator(settings.get_database_url)
     migrator.run_migrations()
+    recover_interrupted_ingestions()
 
 
 @app.get("/")

@@ -12,7 +12,7 @@ class ChunkingTests(unittest.TestCase):
             with self.subTest(values=values), self.assertRaises(ValidationError):
                 ChunkConfig(**values)
         with self.assertRaises(ValidationError):
-            PreviewRequest(document_ids=[])
+            PreviewRequest(upload_ids=[])
 
     def test_parsing_is_independent_of_temporary_path_and_uses_characters(self):
         text = "甲乙丙丁戊己庚辛壬癸" * 10

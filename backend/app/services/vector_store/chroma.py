@@ -22,9 +22,9 @@ class ChromaVectorStore(BaseVectorStore):
             collection_name=collection_name,
             embedding_function=embedding_function,
         )
-    def add_documents(self, documents: List[Document]) -> None:
+    def add_documents(self, documents: List[Document], ids=None) -> None:
         """Add documents to Chroma"""
-        self._store.add_documents(documents)
+        self._store.add_documents(documents, **({"ids": ids} if ids is not None else {}))
     
     def delete(self, ids: List[str]) -> None:
         """Delete documents from Chroma"""
@@ -44,4 +44,9 @@ class ChromaVectorStore(BaseVectorStore):
 
     def delete_collection(self) -> None:
         """Delete the entire collection"""
-        self._store._client.delete_collection(self._store._collection.name) 
+        self._store._client.delete_collection(self._store._collection.name)
+
+    def get_documents(self, ids):
+        result = self._store.get(ids=ids, include=["documents", "metadatas"])
+        return {key: Document(page_content=content, metadata=metadata or {})
+                for key, content, metadata in zip(result["ids"], result["documents"], result["metadatas"])}

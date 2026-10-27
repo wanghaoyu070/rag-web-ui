@@ -10,19 +10,22 @@ from pydantic import BaseModel
 from sqlalchemy.orm import selectinload
 import time
 import asyncio
+import uuid
+import mimetypes
+from pathlib import Path
 
 from app.db.session import get_db
 from app.models.user import User
 from app.core.security import get_current_user
-from app.models.knowledge import KnowledgeBase, Document, ProcessingTask, DocumentChunk, DocumentUpload
+from app.models.knowledge import KnowledgeBase, Document, ProcessingTask, DocumentChunk, DocumentUpload, DocumentPreview
 from app.schemas.knowledge import (
     KnowledgeBaseCreate,
     KnowledgeBaseResponse,
     KnowledgeBaseUpdate,
     DocumentResponse,
-    PreviewRequest
+    PreviewRequest, ChunkConfig, ProcessPreviewsRequest
 )
-from app.services.document_processor import process_document_background, upload_document, preview_document, PreviewResult
+from app.services.preview_ingestion import create_preview, confirm_previews, ingest_preview, encode_snapshot
 from app.core.config import settings
 from app.core.minio import get_minio_client
 from minio.error import MinioException
@@ -232,13 +235,16 @@ async def upload_kb_documents(
     
     results = []
     for file in files:
+        file_name = Path((file.filename or "").replace("\\", "/")).name
+        if len(file_name) > 180 or Path(file_name).suffix.lower() not in (".txt", ".md", ".pdf", ".docx"):
+            raise HTTPException(422, "文件名过长或格式不支持")
         # 1. 计算文件 hash
         file_content = await file.read()
         file_hash = hashlib.sha256(file_content).hexdigest()
         
         # 2. 检查是否存在完全相同的文件（名称和hash都相同）
         existing_document = db.query(Document).filter(
-            Document.file_name == file.filename,
+            Document.file_name == file_name,
             Document.file_hash == file_hash,
             Document.knowledge_base_id == kb_id
         ).first()
@@ -254,8 +260,11 @@ async def upload_kb_documents(
             })
             continue
         
-        # 3. 上传到临时目录
-        temp_path = f"kb_{kb_id}/temp/{file.filename}"
+        same_name = db.query(Document).filter(Document.file_name == file_name, Document.knowledge_base_id == kb_id).first()
+        if same_name:
+            raise HTTPException(409, f"{file_name} 已存在不同版本，请使用不同文件名；不会自动覆盖或重切旧文档")
+        # Unique object paths bind each upload record to immutable file bytes.
+        temp_path = f"kb_{kb_id}/temp/{uuid.uuid4()}/{file_name}"
         await file.seek(0)
         try:
             minio_client = get_minio_client()
@@ -265,7 +274,7 @@ async def upload_kb_documents(
                 object_name=temp_path,
                 data=file.file,
                 length=file_size,  # 指定文件大小
-                content_type=file.content_type
+                content_type=file.content_type or mimetypes.guess_type(file_name)[0] or "application/octet-stream"
             )
         except MinioException as e:
             logger.error(f"Failed to upload file to MinIO: {str(e)}")
@@ -274,10 +283,10 @@ async def upload_kb_documents(
         # 4. 创建上传记录
         upload = DocumentUpload(
             knowledge_base_id=kb_id,
-            file_name=file.filename,
+            file_name=file_name,
             file_hash=file_hash,
             file_size=len(file_content),
-            content_type=file.content_type,
+            content_type=file.content_type or mimetypes.guess_type(file_name)[0] or "application/octet-stream",
             temp_path=temp_path
         )
         db.add(upload)
@@ -286,7 +295,7 @@ async def upload_kb_documents(
         
         results.append({
             "upload_id": upload.id,
-            "file_name": file.filename,
+            "file_name": file_name,
             "temp_path": temp_path,
             "status": "pending",
             "skip_processing": False
@@ -295,174 +304,66 @@ async def upload_kb_documents(
     return results
 
 @router.post("/{kb_id}/documents/preview")
-async def preview_kb_documents(
+def preview_kb_documents(
     kb_id: int,
     preview_request: PreviewRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-) -> Dict[int, PreviewResult]:
-    """
-    Preview multiple documents' chunks.
-    """
-    results = {}
-    for doc_id in preview_request.document_ids:
-        document = db.query(Document).join(KnowledgeBase).filter(
-            Document.id == doc_id,
-            Document.knowledge_base_id == kb_id,
-            KnowledgeBase.user_id == current_user.id
-        ).first()
-        
-        if document:
-            file_path = document.file_path
-        else:
-            upload = db.query(DocumentUpload).join(KnowledgeBase).filter(
-                DocumentUpload.id == doc_id,
-                DocumentUpload.knowledge_base_id == kb_id,
-                KnowledgeBase.user_id == current_user.id
-            ).first()
-            
-            if not upload:
-                raise HTTPException(status_code=404, detail=f"Document {doc_id} not found")
-            
-            file_path = upload.temp_path
-        
-        preview = await preview_document(
-            file_path,
-            chunk_size=preview_request.chunk_size,
-            chunk_overlap=preview_request.chunk_overlap
-        )
-        results[doc_id] = preview
-    
-    return results
+):
+    # These IDs identify uploads only; document IDs are a different namespace.
+    return {upload_id: create_preview(db, kb_id, current_user.id, upload_id,
+                ChunkConfig(chunk_size=preview_request.chunk_size, chunk_overlap=preview_request.chunk_overlap))
+            for upload_id in dict.fromkeys(preview_request.upload_ids)}
+
 
 @router.post("/{kb_id}/documents/process")
-async def process_kb_documents(
+def process_kb_documents(
     kb_id: int,
-    upload_results: List[dict],
+    request: ProcessPreviewsRequest,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Process multiple documents asynchronously.
-    """
-    start_time = time.time()
-    
-    kb = db.query(KnowledgeBase).filter(
-        KnowledgeBase.id == kb_id,
-        KnowledgeBase.user_id == current_user.id
-    ).first()
-    
-    if not kb:
-        raise HTTPException(status_code=404, detail="Knowledge base not found")
-    
-    task_info = []
-    upload_ids = []
-    
-    for result in upload_results:
-        if result.get("skip_processing"):
-            continue
-        upload_ids.append(result["upload_id"])
-    
-    if not upload_ids:
-        return {"tasks": []}
-    
-    uploads = db.query(DocumentUpload).filter(
-        DocumentUpload.id.in_(upload_ids),
-        DocumentUpload.knowledge_base_id == kb_id
-    ).all()
-    uploads_dict = {upload.id: upload for upload in uploads}
-    if len(uploads_dict) != len(set(upload_ids)):
-        raise HTTPException(status_code=400, detail="One or more upload IDs are invalid")
-    
-    all_tasks = []
-    for upload_id in upload_ids:
-        upload = uploads_dict.get(upload_id)
-        if not upload:
-            continue
-            
-        task = ProcessingTask(
-            document_upload_id=upload_id,
-            knowledge_base_id=kb_id,
-            status="pending"
-        )
-        all_tasks.append(task)
-    
-    db.add_all(all_tasks)
-    db.commit()
-    
-    for task in all_tasks:
-        db.refresh(task)
-    
-    task_data = []
-    for i, upload_id in enumerate(upload_ids):
-        if i < len(all_tasks):
-            task = all_tasks[i]
-            upload = uploads_dict.get(upload_id)
-            
-            task_info.append({
-                "upload_id": upload_id,
-                "task_id": task.id
-            })
-            
-            if upload:
-                task_data.append({
-                    "task_id": task.id,
-                    "upload_id": upload_id,
-                    "temp_path": upload.temp_path,
-                    "file_name": upload.file_name
-                })
-    
-    background_tasks.add_task(
-        add_processing_tasks_to_queue,
-        task_data,
-        kb_id
-    )
-    
-    return {"tasks": task_info}
+    tasks, scheduled = confirm_previews(db, kb_id, current_user.id, request.preview_ids)
+    for task_id in scheduled:
+        background_tasks.add_task(ingest_preview, task_id)
+    return {"tasks": tasks}
 
-async def add_processing_tasks_to_queue(task_data, kb_id):
-    """Helper function to add document processing tasks to the queue without blocking the main response."""
-    for data in task_data:
-        asyncio.create_task(
-            process_document_background(
-                data["temp_path"],
-                data["file_name"],
-                kb_id,
-                data["task_id"],
-                None
-            )
-        )
-    logger.info(f"Added {len(task_data)} document processing tasks to queue")
 
 @router.post("/cleanup")
-async def cleanup_temp_files(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Clean up expired temporary files.
-    """
-    expired_time = datetime.utcnow() - timedelta(hours=24)
-    expired_uploads = db.query(DocumentUpload).filter(
-        DocumentUpload.created_at < expired_time
+def cleanup_temp_files(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    now = datetime.utcnow()
+    uploads = db.query(DocumentUpload).join(KnowledgeBase).filter(
+        KnowledgeBase.user_id == current_user.id,
+        DocumentUpload.created_at < now - timedelta(hours=24),
+        DocumentUpload.status != "completed",
     ).all()
-    
-    minio_client = get_minio_client()
-    for upload in expired_uploads:
-        try:
-            minio_client.remove_object(
-                bucket_name=settings.MINIO_BUCKET_NAME,
-                object_name=upload.temp_path
-            )
-        except MinioException as e:
-            logger.error(f"Failed to delete temp file {upload.temp_path}: {str(e)}")
-        
-        db.delete(upload)
-    
-    db.commit()
-    
-    return {"message": f"Cleaned up {len(expired_uploads)} expired uploads"}
+    client = get_minio_client()
+    cleaned = 0
+    for upload in uploads:
+        # Serialize with confirmation so a cleanup cannot race a newly accepted job.
+        db.refresh(upload, with_for_update=True)
+        running = db.query(ProcessingTask).filter(
+            ProcessingTask.document_upload_id == upload.id,
+            ProcessingTask.status.in_(["pending", "processing"]),
+        ).with_for_update().first()
+        if running:
+            db.commit()
+            continue
+        previews = db.query(DocumentPreview).filter(DocumentPreview.upload_id == upload.id).with_for_update().all()
+        if any(p.expires_at > now for p in previews):
+            db.commit()
+            continue
+        for preview in previews:
+            client.remove_object(settings.MINIO_BUCKET_NAME, preview.snapshot_path)
+            client.remove_object(settings.MINIO_BUCKET_NAME, f"kb_{upload.knowledge_base_id}/documents/{preview.id}/{upload.file_name}")
+            preview.status = "expired"
+        client.remove_object(settings.MINIO_BUCKET_NAME, upload.temp_path)
+        upload.status = "expired"
+        db.commit()
+        cleaned += 1
+    return {"message": f"已清理 {cleaned} 个过期上传；正在处理的快照不清理"}
+
 
 @router.get("/{kb_id}/documents/tasks")
 async def get_processing_tasks(
@@ -474,7 +375,12 @@ async def get_processing_tasks(
     """
     Get status of multiple processing tasks.
     """
-    task_id_list = [int(id.strip()) for id in task_ids.split(",")]
+    try:
+        task_id_list = [int(value.strip()) for value in task_ids.split(",")]
+        if not 1 <= len(task_id_list) <= 50:
+            raise ValueError()
+    except ValueError:
+        raise HTTPException(422, "任务ID必须为1至50个整数")
     
     kb = db.query(KnowledgeBase).filter(
         KnowledgeBase.id == kb_id,
@@ -499,6 +405,8 @@ async def get_processing_tasks(
     return {
         task.id: {
             "document_id": task.document_id,
+            "preview_id": task.preview_id,
+            "chunk_count": task.document.chunk_count if task.document else None,
             "status": task.status,
             "error_message": task.error_message,
             "upload_id": task.document_upload_id,
@@ -533,6 +441,37 @@ async def get_document(
         raise HTTPException(status_code=404, detail="Document not found")
     
     return document
+
+@router.get("/{kb_id}/documents/{doc_id}/chunks")
+def get_document_chunks(
+    kb_id: int, doc_id: int, db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    document = db.query(Document).join(KnowledgeBase).filter(
+        Document.id == doc_id, Document.knowledge_base_id == kb_id,
+        KnowledgeBase.user_id == current_user.id,
+    ).first()
+    if not document:
+        raise HTTPException(404, "文档不存在")
+    records = db.query(DocumentChunk).filter(DocumentChunk.document_id == doc_id).order_by(
+        DocumentChunk.chunk_index, DocumentChunk.id
+    ).all()
+    chunks = [{"content": (row.chunk_metadata or {}).get("page_content", ""),
+               "metadata": (row.chunk_metadata or {}).get("preview_metadata", {
+                   k: v for k, v in (row.chunk_metadata or {}).items() if k != "page_content"})}
+              for row in records]
+    matches = None
+    if document.preview_id:
+        preview = db.get(DocumentPreview, document.preview_id)
+        if preview:
+            payload = {"file_hash": preview.file_hash, "config": preview.config,
+                       "version": preview.processor_version, "chunks": chunks}
+            matches = hashlib.sha256(encode_snapshot(payload)).hexdigest() == preview.snapshot_hash
+    return {"document_id": doc_id, "file_name": document.file_name,
+            "config": document.chunk_config, "preview_id": document.preview_id,
+            "total_chunks": len(chunks), "snapshot_matches": matches,
+            "order_known": all(row.chunk_index is not None for row in records), "chunks": chunks}
+
 
 @router.post("/test-retrieval")
 async def test_retrieval(

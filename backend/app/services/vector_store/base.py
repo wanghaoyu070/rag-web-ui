@@ -12,7 +12,7 @@ class BaseVectorStore(ABC):
         pass
     
     @abstractmethod
-    def add_documents(self, documents: List[Document]) -> None:
+    def add_documents(self, documents: List[Document], ids=None) -> None:
         """Add documents to the vector store"""
         pass
     

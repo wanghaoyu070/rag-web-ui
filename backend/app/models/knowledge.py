@@ -30,6 +30,9 @@ class Document(Base, TimestampMixin):
     file_name = Column(String(255), nullable=False)  # Actual file name
     file_size = Column(BigInteger, nullable=False)  # File size in bytes
     content_type = Column(String(100), nullable=False)  # MIME type
+    preview_id = Column(String(36), nullable=True)
+    chunk_config = Column(JSON, nullable=True)
+    chunk_count = Column(Integer, nullable=True)
     file_hash = Column(String(64), index=True)  # SHA-256 hash of file content
     knowledge_base_id = Column(Integer, ForeignKey("knowledge_bases.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -55,6 +58,7 @@ class DocumentUpload(Base):
     file_size = Column(BigInteger, nullable=False)
     content_type = Column(String, nullable=False)
     temp_path = Column(String, nullable=False)
+    current_preview_id = Column(String(36), nullable=True)
     created_at = Column(TIMESTAMP, nullable=False, server_default=text("now()"))
     status = Column(String, nullable=False, server_default="pending")
     error_message = Column(Text)
@@ -69,6 +73,7 @@ class ProcessingTask(Base):
     knowledge_base_id = Column(Integer, ForeignKey("knowledge_bases.id"))
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
     document_upload_id = Column(Integer, ForeignKey("document_uploads.id"), nullable=True)
+    preview_id = Column(String(36), unique=True, nullable=True)
     status = Column(String(50), default="pending")  # pending, processing, completed, failed
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -85,6 +90,7 @@ class DocumentChunk(Base, TimestampMixin):
     kb_id = Column(Integer, ForeignKey("knowledge_bases.id"), nullable=False)
     document_id = Column(Integer, ForeignKey("documents.id"), nullable=False)
     file_name = Column(String(255), nullable=False)
+    chunk_index = Column(Integer, nullable=True)
     chunk_metadata = Column(JSON, nullable=True)
     hash = Column(String(64), nullable=False, index=True)  # Content hash for change detection
     
@@ -94,4 +100,18 @@ class DocumentChunk(Base, TimestampMixin):
 
     __table_args__ = (
         sa.Index('idx_kb_file_name', 'kb_id', 'file_name'),
-    ) 
+    )
+
+class DocumentPreview(Base):
+    __tablename__ = "document_previews"
+    id = Column(String(36), primary_key=True)
+    upload_id = Column(Integer, ForeignKey("document_uploads.id", ondelete="CASCADE"), nullable=False, index=True)
+    file_hash = Column(String(64), nullable=False)
+    snapshot_path = Column(String(255), nullable=False)
+    snapshot_hash = Column(String(64), nullable=False)
+    config = Column(JSON, nullable=False)
+    processor_version = Column(String(100), nullable=False)
+    chunk_count = Column(Integer, nullable=False)
+    status = Column(String(30), nullable=False, default="ready")
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)

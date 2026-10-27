@@ -18,9 +18,9 @@ class QdrantStore(BaseVectorStore):
             prefer_grpc=settings.QDRANT_PREFER_GRPC
         )
     
-    def add_documents(self, documents: List[Document]) -> None:
+    def add_documents(self, documents: List[Document], ids=None) -> None:
         """Add documents to Qdrant"""
-        self._store.add_documents(documents)
+        self._store.add_documents(documents, **({"ids": ids} if ids is not None else {}))
     
     def delete(self, ids: List[str]) -> None:
         """Delete documents from Qdrant"""
@@ -40,4 +40,10 @@ class QdrantStore(BaseVectorStore):
 
     def delete_collection(self) -> None:
         """Delete the entire collection"""
-        self._store._client.delete_collection(self._store._collection_name) 
+        self._store._client.delete_collection(self._store._collection_name)
+
+    def get_documents(self, ids):
+        points = self._store.client.retrieve(self._store.collection_name, ids=ids, with_payload=True)
+        return {str(point.id): Document(
+            page_content=point.payload[self._store.content_payload_key],
+            metadata=point.payload.get(self._store.metadata_payload_key) or {}) for point in points}

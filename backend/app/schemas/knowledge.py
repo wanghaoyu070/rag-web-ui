@@ -64,6 +64,9 @@ class DocumentResponse(DocumentBase):
     knowledge_base_id: int
     created_at: datetime
     updated_at: datetime
+    preview_id: Optional[str] = None
+    chunk_config: Optional[dict] = None
+    chunk_count: Optional[int] = None
     processing_tasks: List[ProcessingTask] = []
 
     class Config:
@@ -91,4 +94,8 @@ class ChunkConfig(BaseModel):
 
 
 class PreviewRequest(ChunkConfig):
-    document_ids: List[int] = Field(min_length=1, max_length=50)
+    upload_ids: List[int] = Field(min_length=1, max_length=50)
+
+
+class ProcessPreviewsRequest(BaseModel):
+    preview_ids: List[str] = Field(min_length=1, max_length=50)
