@@ -21,6 +21,11 @@ from app.services.vector_store import VectorStoreFactory
 logger = logging.getLogger(__name__)
 
 
+class SnapshotValidationError(ValueError):
+    """Safe, actionable messages produced by our own integrity checks."""
+    pass
+
+
 def encode_snapshot(payload):
     return json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
@@ -52,12 +57,12 @@ def read_snapshot(client, preview):
         response.close()
         response.release_conn()
     if hashlib.sha256(raw).hexdigest() != preview.snapshot_hash:
-        raise ValueError("预览快照完整性校验失败")
+        raise SnapshotValidationError("预览快照完整性校验失败")
     payload = json.loads(raw)
     if (payload["file_hash"] != preview.file_hash or payload["config"] != preview.config
             or payload["version"] != preview.processor_version
             or len(payload["chunks"]) != preview.chunk_count):
-        raise ValueError("预览快照配置或数量不匹配")
+        raise SnapshotValidationError("预览快照配置或数量不匹配")
     return payload
 
 
@@ -75,6 +80,8 @@ def create_preview(db, kb_id, user_id, upload_id, config):
             chunks = load_and_split(path, upload.file_name, config)
         except ValueError as error:
             raise HTTPException(422, str(error)) from error
+        except Exception as error:
+            raise HTTPException(422, "无法解析文件，请检查格式；TXT需使用UTF-8，扫描件需先识别文字") from error
     payload = {"file_hash": upload.file_hash, "version": PROCESSOR_VERSION,
                "config": config.model_dump(), "chunks": [
                    {"content": chunk.page_content, "metadata": chunk.metadata} for chunk in chunks]}
@@ -166,12 +173,12 @@ def ingest_preview(task_id):
         client = get_minio_client()
         payload = read_snapshot(client, preview)
         if upload.file_hash != preview.file_hash:
-            raise ValueError("文件版本已变化")
+            raise SnapshotValidationError("文件版本已变化")
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory)/"original")
             client.fget_object(settings.MINIO_BUCKET_NAME, upload.temp_path, path)
             if digest_file(path) != preview.file_hash:
-                raise ValueError("原文件哈希不匹配，请重新上传")
+                raise SnapshotValidationError("原文件哈希不匹配，请重新上传")
         # Keep originals at a unique path; no destructive move or same-name overwrite.
         permanent_path = f"kb_{upload.knowledge_base_id}/documents/{preview.id}/{upload.file_name}"
         client.copy_object(settings.MINIO_BUCKET_NAME, permanent_path,
@@ -204,10 +211,10 @@ def ingest_preview(task_id):
             saved[key].page_content != vector.page_content or saved[key].metadata != vector.metadata
             for key, vector in zip(ids, vectors)
         ):
-            raise ValueError("向量库片段内容、来源或数量校验失败")
+            raise SnapshotValidationError("向量库片段内容、来源或数量校验失败")
         db.flush()
         if db.query(DocumentChunk).filter(DocumentChunk.document_id == document.id).count() != preview.chunk_count:
-            raise ValueError("数据库片段数量校验失败")
+            raise SnapshotValidationError("数据库片段数量校验失败")
         task.status, task.document_id = "completed", document.id
         upload.status, preview.status = "completed", "completed"
         db.commit()
@@ -231,7 +238,8 @@ def ingest_preview(task_id):
         task = db.get(ProcessingTask, task_id)
         if task:
             task.status = "failed"
-            task.error_message = f"处理失败（{type(error).__name__}），可重试；请检查原文件或服务连接。" + ("部分向量待重试清理。" if cleanup_failed else "")
+            detail = str(error) if isinstance(error, SnapshotValidationError) else "请检查文件存储、向量模型或服务连接，然后重试"
+            task.error_message = f"处理失败：{detail}（{type(error).__name__}）。" + ("部分向量待重试清理。" if cleanup_failed else "")
             upload = db.get(DocumentUpload, task.document_upload_id)
             preview = db.get(DocumentPreview, task.preview_id)
             if upload:

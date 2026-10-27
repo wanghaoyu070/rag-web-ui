@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FileText } from "lucide-react";
+import { DocumentChunksButton } from "./document-chunks-button";
 
 interface Document {
   id: number;
@@ -111,6 +112,7 @@ export function DocumentList({ knowledgeBaseId }: DocumentListProps) {
           <TableHead>Size</TableHead>
           <TableHead>Created</TableHead>
           <TableHead>Status</TableHead>
+          <TableHead>入库片段</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -159,6 +161,7 @@ export function DocumentList({ knowledgeBaseId }: DocumentListProps) {
                 </Badge>
               )}
             </TableCell>
+            <TableCell><DocumentChunksButton knowledgeBaseId={knowledgeBaseId} documentId={doc.id} fileName={doc.file_name} /></TableCell>
           </TableRow>
         ))}
       </TableBody>

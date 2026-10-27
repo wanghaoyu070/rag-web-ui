@@ -287,7 +287,8 @@ async def upload_kb_documents(
             file_hash=file_hash,
             file_size=len(file_content),
             content_type=file.content_type or mimetypes.guess_type(file_name)[0] or "application/octet-stream",
-            temp_path=temp_path
+            temp_path=temp_path,
+            created_at=datetime.utcnow(),
         )
         db.add(upload)
         db.commit()

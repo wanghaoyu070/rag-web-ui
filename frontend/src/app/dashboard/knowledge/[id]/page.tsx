@@ -38,7 +38,7 @@ export default function KnowledgeBasePage() {
               Add Document
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-4xl">
+          <DialogContent className="max-w-4xl max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add Document</DialogTitle>
               <DialogDescription>
