@@ -1,6 +1,6 @@
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 class KnowledgeBaseBase(BaseModel):
     name: str
@@ -79,7 +79,16 @@ class KnowledgeBaseResponse(KnowledgeBaseBase):
     class Config:
         from_attributes = True
 
-class PreviewRequest(BaseModel):
-    document_ids: List[int]
-    chunk_size: int = 1000
-    chunk_overlap: int = 200 
+class ChunkConfig(BaseModel):
+    chunk_size: int = Field(default=1000, strict=True, ge=1, le=20000)
+    chunk_overlap: int = Field(default=200, strict=True, ge=0)
+
+    @model_validator(mode="after")
+    def validate_overlap(self):
+        if self.chunk_overlap >= self.chunk_size:
+            raise ValueError("重叠字符数必须小于片段长度")
+        return self
+
+
+class PreviewRequest(ChunkConfig):
+    document_ids: List[int] = Field(min_length=1, max_length=50)

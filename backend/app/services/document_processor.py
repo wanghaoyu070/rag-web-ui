@@ -8,13 +8,6 @@ from app.db.session import SessionLocal
 from io import BytesIO
 from typing import Optional, List, Dict, Set
 from fastapi import UploadFile
-from langchain_community.document_loaders import (
-    PyPDFLoader,
-    Docx2txtLoader,
-    UnstructuredMarkdownLoader,
-    TextLoader
-)
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document as LangchainDocument
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
@@ -24,13 +17,14 @@ from app.core.minio import get_minio_client
 from app.models.knowledge import ProcessingTask, Document, DocumentChunk
 from app.services.chunk_record import ChunkRecord
 import uuid
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import UnstructuredFileLoader
 from minio.error import MinioException
 from minio import Minio
 from minio.commonconfig import CopySource
 from app.services.vector_store import VectorStoreFactory
 from app.services.embedding.embedding_factory import EmbeddingsFactory
+from app.schemas.knowledge import ChunkConfig
+from app.services.chunking import load_and_split
 
 class UploadResult(BaseModel):
     file_path: str
@@ -197,24 +191,10 @@ async def preview_document(file_path: str, chunk_size: int = 1000, chunk_overlap
         temp_path = temp_file.name
     
     try:
-        # Select appropriate loader
-        if ext == ".pdf":
-            loader = PyPDFLoader(temp_path)
-        elif ext == ".docx":
-            loader = Docx2txtLoader(temp_path)
-        elif ext == ".md":
-            loader = UnstructuredMarkdownLoader(temp_path)
-        else:  # Default to text loader
-            loader = TextLoader(temp_path)
-        
-        # Load and split the document
-        documents = loader.load()
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap
-        )
-        chunks = text_splitter.split_documents(documents)
-        
+        chunks = load_and_split(temp_path, os.path.basename(file_path), ChunkConfig(
+            chunk_size=chunk_size, chunk_overlap=chunk_overlap
+        ))
+
         # Convert to preview format
         preview_chunks = [
             TextChunk(
@@ -278,33 +258,10 @@ async def process_document_background(
             raise Exception(error_msg)
         
         try:
-            # 2. 加载和分块文档
-            _, ext = os.path.splitext(file_name)
-            ext = ext.lower()
-            
-            logger.info(f"Task {task_id}: Loading document with extension {ext}")
-            # 选择合适的加载器
-            if ext == ".pdf":
-                loader = PyPDFLoader(local_temp_path)
-            elif ext == ".docx":
-                loader = Docx2txtLoader(local_temp_path)
-            elif ext == ".md":
-                loader = UnstructuredMarkdownLoader(local_temp_path)
-            else:  # 默认使用文本加载器
-                loader = TextLoader(local_temp_path)
-            
-            logger.info(f"Task {task_id}: Loading document content")
-            documents = loader.load()
-            logger.info(f"Task {task_id}: Document loaded successfully")
-            
-            logger.info(f"Task {task_id}: Splitting document into chunks")
-            text_splitter = RecursiveCharacterTextSplitter(
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap
-            )
-            chunks = text_splitter.split_documents(documents)
-            logger.info(f"Task {task_id}: Document split into {len(chunks)} chunks")
-            
+            chunks = load_and_split(local_temp_path, file_name, ChunkConfig(
+                chunk_size=chunk_size, chunk_overlap=chunk_overlap
+            ))
+
             # 3. 创建向量存储
             logger.info(f"Task {task_id}: Initializing vector store")
             embeddings = EmbeddingsFactory.create()

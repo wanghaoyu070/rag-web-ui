@@ -513,7 +513,7 @@ export function DocumentUploadSteps({
                   <AccordionContent>
                     <div className="grid gap-4 md:grid-cols-2 pt-4">
                       <div className="space-y-2">
-                        <Label htmlFor="chunk-size">Chunk Size (tokens)</Label>
+                        <Label htmlFor="chunk-size">Chunk Size（字符）</Label>
                         <Input
                           id="chunk-size"
                           type="number"
@@ -525,7 +525,7 @@ export function DocumentUploadSteps({
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="chunk-overlap">
-                          Chunk Overlap (tokens)
+                          Chunk Overlap（字符）
                         </Label>
                         <Input
                           id="chunk-overlap"
